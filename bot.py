@@ -442,6 +442,40 @@ def is_admin(user_id: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Handlers: /registerchat -- auto-detect group chat ID
+# ---------------------------------------------------------------------------
+
+async def cmd_registerchat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save current group chat as TEAM_CHAT_ID (admin-only, groups only)."""
+    global TEAM_CHAT_ID
+    chat = update.effective_chat
+    user = update.effective_user
+
+    if chat.type == "private":
+        await update.message.reply_text("Эту команду нужно использовать в групповом чате.")
+        return
+
+    if ADMIN_IDS and user.id not in ADMIN_IDS:
+        await update.message.reply_text("Только администратор может зарегистрировать чат.")
+        return
+
+    TEAM_CHAT_ID = chat.id
+    # Persist to .env
+    import pathlib
+    env_path = pathlib.Path(__file__).parent / ".env"
+    lines = env_path.read_text().splitlines() if env_path.exists() else []
+    new_lines = [l for l in lines if not l.startswith("TEAM_CHAT_ID=")]
+    new_lines.append(f"TEAM_CHAT_ID={chat.id}")
+    env_path.write_text("\n".join(new_lines) + "\n")
+
+    await update.message.reply_text(
+        f"✅ Чат зарегистрирован как командный!\n"
+        f"Chat ID: {chat.id}\n\n"
+        f"Теперь я буду отправлять сюда стендапы, отчёты и напоминания."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Handlers: /start
 # ---------------------------------------------------------------------------
 
@@ -1250,6 +1284,7 @@ def main() -> None:
     app = Application.builder().token(token).post_init(post_init).build()
 
     # Team commands
+    app.add_handler(CommandHandler("registerchat", cmd_registerchat))
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("standup", cmd_standup))
     app.add_handler(CommandHandler("addtask", cmd_addtask))
